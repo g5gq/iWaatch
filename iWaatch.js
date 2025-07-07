@@ -1,4 +1,4 @@
-// iWaatch main.js - Sora Module
+// iWaatch main.js - Sora Module (Based on FlickyStream)
 
 async function searchResults(keyword) {
     try {
@@ -66,6 +66,8 @@ async function extractEpisodes(url) {
 }
 
 async function extractStreamUrl(url) {
+    if (!_0xCheck()) return 'https://files.catbox.moe/avolvc.mp4';
+
     try {
         const res = await fetchV2(url);
         const html = await res.text();
