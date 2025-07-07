@@ -1,4 +1,4 @@
-// iWaatch main.js - Sora Module (Based on FlickyStream)
+// iWaatch main.js - Sora Module (Copy of FlickyStream)
 
 async function searchResults(keyword) {
     try {
@@ -6,28 +6,33 @@ async function searchResults(keyword) {
         const responseText = await soraFetch(`https://api.themoviedb.org/3/search/movie?api_key=adc48d20c0956934fb224de5c40bb85d&query=${encodedKeyword}`);
         const data = await responseText.json();
 
-        if (!data || !data.results) {
+        if (!data || !data.results || data.results.length === 0) {
             throw new Error('No results returned from TMDB');
         }
 
         const transformedResults = data.results.map(result => {
-            return {
-                title: result.title || result.name || result.original_title || result.original_name || "Untitled",
-                image: result.poster_path ? `https://image.tmdb.org/t/p/w500${result.poster_path}` : '',
-                href: `https://iwaatch.com/movie/${result.id}`
-            };
+            const title = result.title || result.name || result.original_title || result.original_name || "Untitled";
+            const image = result.poster_path ? `https://image.tmdb.org/t/p/w500${result.poster_path}` : 'https://via.placeholder.com/500';
+            const href = `https://iwaatch.com/movie/${result.id}`;
+
+            return { title, image, href };
         });
 
         return JSON.stringify(transformedResults);
     } catch (error) {
-        console.log('Search error in searchResults:', error);
+        console.log('Error in searchResults:', error);
         return JSON.stringify([{ title: 'Error', image: '', href: '' }]);
     }
 }
 
 async function extractDetails(url) {
     try {
-        const movieId = url.match(/https:\/\/iwaatch\.com\/movie\/([^\/]+)/)[1];
+        const match = url.match(/https:\/\/iwaatch\.com\/movie\/([^\/]+)/);
+        if (!match) {
+            throw new Error("Invalid URL format");
+        }
+        const movieId = match[1];
+        
         const responseText = await soraFetch(`https://api.themoviedb.org/3/movie/${movieId}?api_key=adc48d20c0956934fb224de5c40bb85d`);
         const data = await responseText.json();
 
@@ -35,10 +40,14 @@ async function extractDetails(url) {
             throw new Error('No data returned for movie details');
         }
 
+        const description = data.overview || 'No description available';
+        const aliases = `Duration: ${data.runtime ? data.runtime + " minutes" : 'Unknown'}`;
+        const airdate = `Released: ${data.release_date || 'Unknown'}`;
+
         const transformedResults = [{
-            description: data.overview || 'No description available',
-            aliases: `Duration: ${data.runtime ? data.runtime + " minutes" : 'Unknown'}`,
-            airdate: `Released: ${data.release_date || 'Unknown'}`
+            description,
+            aliases,
+            airdate
         }];
 
         return JSON.stringify(transformedResults);
@@ -54,8 +63,12 @@ async function extractDetails(url) {
 
 async function extractEpisodes(url) {
     try {
-        const movieId = url.match(/https:\/\/iwaatch\.com\/movie\/([^\/]+)/)[1];
-        
+        const match = url.match(/https:\/\/iwaatch\.com\/movie\/([^\/]+)/);
+        if (!match) {
+            throw new Error("Invalid URL format");
+        }
+        const movieId = match[1];
+
         return JSON.stringify([
             { href: `https://iwaatch.com/movie/${movieId}`, number: 1, title: "Full Movie" }
         ]);
@@ -66,9 +79,9 @@ async function extractEpisodes(url) {
 }
 
 async function extractStreamUrl(url) {
-    if (!_0xCheck()) return 'https://files.catbox.moe/avolvc.mp4';
-
     try {
+        if (!_0xCheck()) return 'https://files.catbox.moe/avolvc.mp4';
+
         const res = await fetchV2(url);
         const html = await res.text();
 
@@ -141,3 +154,38 @@ function _0x7E9A(_) {
         }), ____ === String.fromCharCode(...[115, 116, 114, 105, 110, 103]) && _____ === 16 && ________[String.fromCharCode(...[108, 101, 110, 103, 116, 104])] === 0;
     })(_);
 }
+
+// Adding more complexity for deeper checking on failed fetches
+async function checkFetchData(url) {
+    try {
+        const response = await soraFetch(url);
+        const text = await response.text();
+
+        if (!text.includes('<video src="')) {
+            throw new Error('Stream data missing');
+        }
+
+        const videoSrcMatch = text.match(/<video\s+src="([^"]+)"/);
+        const streamUrl = videoSrcMatch ? videoSrcMatch[1] : 'Error: Video source not found';
+
+        return streamUrl;
+    } catch (err) {
+        console.log("Error in checkFetchData:", err);
+        return 'Error: Fetch failed';
+    }
+}
+
+// Helper to retrieve subtitle URL
+async function getSubtitle(url) {
+    try {
+        const res = await fetch(url);
+        const html = await res.text();
+        const subtitleMatch = html.match(/<track\s+src="([^"]+)"[^>]*label="Arabic"/);
+
+        return subtitleMatch ? subtitleMatch[1] : 'No Arabic subtitles available';
+    } catch (err) {
+        console.log("Error in getSubtitle:", err);
+        return 'No subtitle found';
+    }
+}
+
