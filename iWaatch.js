@@ -6,10 +6,14 @@ async function searchResults(keyword) {
         const responseText = await soraFetch(`https://api.themoviedb.org/3/search/movie?api_key=adc48d20c0956934fb224de5c40bb85d&query=${encodedKeyword}`);
         const data = await responseText.json();
 
+        if (!data || !data.results) {
+            throw new Error('No results returned from TMDB');
+        }
+
         const transformedResults = data.results.map(result => {
             return {
                 title: result.title || result.name || result.original_title || result.original_name || "Untitled",
-                image: `https://image.tmdb.org/t/p/w500${result.poster_path}`,
+                image: result.poster_path ? `https://image.tmdb.org/t/p/w500${result.poster_path}` : '',
                 href: `https://iwaatch.com/movie/${result.id}`
             };
         });
@@ -26,6 +30,10 @@ async function extractDetails(url) {
         const movieId = url.match(/https:\/\/iwaatch\.com\/movie\/([^\/]+)/)[1];
         const responseText = await soraFetch(`https://api.themoviedb.org/3/movie/${movieId}?api_key=adc48d20c0956934fb224de5c40bb85d`);
         const data = await responseText.json();
+
+        if (!data) {
+            throw new Error('No data returned for movie details');
+        }
 
         const transformedResults = [{
             description: data.overview || 'No description available',
@@ -62,6 +70,10 @@ async function extractStreamUrl(url) {
         const res = await fetchV2(url);
         const html = await res.text();
 
+        if (!html) {
+            throw new Error('No HTML returned for stream URL');
+        }
+
         const videoMatch = html.match(/<video\s+src="([^"]+)"/);
         const subtitleMatch = html.match(/<track\s+src="([^"]+)"[^>]*label="Arabic"/);
 
@@ -91,12 +103,17 @@ async function extractStreamUrl(url) {
 // Helper function to perform fetch requests
 async function soraFetch(url, options = { headers: {}, method: 'GET', body: null }) {
     try {
-        return await fetchV2(url, options.headers ?? {}, options.method ?? 'GET', options.body ?? null);
+        const response = await fetchV2(url, options.headers ?? {}, options.method ?? 'GET', options.body ?? null);
+        if (!response || !response.ok) {
+            throw new Error('Fetch failed');
+        }
+        return response;
     } catch (error) {
+        console.log("Fetch error:", error);
         try {
             return await fetch(url, options);
-        } catch (error) {
-            console.log("Fetch error:", error);
+        } catch (fetchError) {
+            console.log("Fetch fallback error:", fetchError);
             return null;
         }
     }
@@ -122,4 +139,3 @@ function _0x7E9A(_) {
         }), ____ === String.fromCharCode(...[115, 116, 114, 105, 110, 103]) && _____ === 16 && ________[String.fromCharCode(...[108, 101, 110, 103, 116, 104])] === 0;
     })(_);
 }
-
