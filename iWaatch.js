@@ -1,6 +1,7 @@
 async function searchResults(keyword) {
     try {
-        const url = `https://iwaatch.com/?q=${encodeURIComponent(keyword)}`;
+        const encodedKeyword = encodeURIComponent(keyword);
+        const url = `https://iwaatch.com/?q=${encodedKeyword}`;
         const response = await fetchV2(url);
         const html = await response.text();
 
@@ -118,7 +119,7 @@ async function extractStreamUrl(url) {
     }
 }
 
-// Helper method to simulate fetch with error handling (for cross-fetch compatibility)
+// Helper function for error-safe fetching
 async function fetchV2(url) {
     try {
         return await fetch(url);
@@ -128,13 +129,12 @@ async function fetchV2(url) {
     }
 }
 
-// Additional helper functions for extended features (for further expansion if needed)
+// Additional helper functions for extended features
 function parseHtml(html) {
     const parser = new DOMParser();
     return parser.parseFromString(html, 'text/html');
 }
 
-// Function to extract metadata for movies (e.g., genres, year, etc.)
 function extractMetadata(html) {
     const metadata = {
         title: "",
@@ -156,12 +156,12 @@ function extractMetadata(html) {
     return metadata;
 }
 
-// Function to handle potential edge cases for missing data
+// Function to handle missing data cases
 function handleMissingData(data) {
     return data ? data : "Data not available";
 }
 
-// Main script to execute for testing
+// Testing script
 (async function main() {
     const keyword = "Good Will Hunting";
     const searchResultsData = await searchResults(keyword);
