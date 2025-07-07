@@ -117,3 +117,58 @@ async function extractStreamUrl(url) {
         });
     }
 }
+
+// Helper method to simulate fetch with error handling (for cross-fetch compatibility)
+async function fetchV2(url) {
+    try {
+        return await fetch(url);
+    } catch (error) {
+        console.error("Fetch error:", error);
+        throw error;
+    }
+}
+
+// Additional helper functions for extended features (for further expansion if needed)
+function parseHtml(html) {
+    const parser = new DOMParser();
+    return parser.parseFromString(html, 'text/html');
+}
+
+// Function to extract metadata for movies (e.g., genres, year, etc.)
+function extractMetadata(html) {
+    const metadata = {
+        title: "",
+        genres: [],
+        year: "",
+        rating: ""
+    };
+    
+    const titleMatch = html.match(/<h1 class="movie-title">([^<]+)<\/h1>/);
+    const genresMatch = html.match(/<div class="genres">([^<]+)<\/div>/);
+    const yearMatch = html.match(/<span class="release-year">([^<]+)<\/span>/);
+    const ratingMatch = html.match(/<div class="rating">([^<]+)<\/div>/);
+    
+    if (titleMatch) metadata.title = titleMatch[1].trim();
+    if (genresMatch) metadata.genres = genresMatch[1].split(',').map(genre => genre.trim());
+    if (yearMatch) metadata.year = yearMatch[1].trim();
+    if (ratingMatch) metadata.rating = ratingMatch[1].trim();
+    
+    return metadata;
+}
+
+// Function to handle potential edge cases for missing data
+function handleMissingData(data) {
+    return data ? data : "Data not available";
+}
+
+// Main script to execute for testing
+(async function main() {
+    const keyword = "Good Will Hunting";
+    const searchResultsData = await searchResults(keyword);
+    const movieDetails = await extractDetails("https://iwaatch.com/movie/Good_Will_Hunting");
+    const streamUrl = await extractStreamUrl("https://iwaatch.com/movie/Good_Will_Hunting");
+
+    console.log("Search Results:", searchResultsData);
+    console.log("Movie Details:", movieDetails);
+    console.log("Stream URL:", streamUrl);
+})();
