@@ -1,135 +1,119 @@
 async function searchResults(keyword) {
-    const results = [];
     try {
-        const searchUrl = `https://iwaatch.com/?q=${encodeURIComponent(keyword)}`;
-        const headers = { 'User-Agent': 'Mozilla/5.0' };
-        const response = await fetchV2(searchUrl, headers);
+        const url = `https://iwaatch.com/?q=${encodeURIComponent(keyword)}`;
+        const response = await fetchV2(url);
         const html = await response.text();
-        // Find all anchors linking to movie pages
-        const regex = /<a[^>]+href="(https?:\/\/iwaatch\.com\/movie\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+
+        const results = [];
+        const containerRegex = /<div class="col-xs-12 col-sm-6 col-md-3 [^"]*">([\s\S]*?)<\/a>\s*<\/div>/g;
         let match;
-        while ((match = regex.exec(html)) !== null) {
-            const href = match[1];
-            // Inner text contains "score Title Genre ..."
-            const innerText = match[2].trim();
-            // Extract title (English part before Arabic category)
-            const titleMatch = innerText.match(/^\d+\.\d+\/10\s+(.+?)\s+[\u0600-\u06FF]/);
-            const title = titleMatch ? titleMatch[1].trim() : innerText;
-            // No clear image on search results; leave empty or could fetch from detail
-            const image = "";
-            if (title && href) {
-                results.push({ title: title, image: image, href: href });
+
+        while ((match = containerRegex.exec(html)) !== null) {
+            const block = match[1];
+
+            const hrefMatch = block.match(/<a href="([^"]+)"/);
+            const imgMatch = block.match(/background-image:\s*url\('([^']+)'\)/);
+            const titleMatch = block.match(/<div class="post-title">([^<]+)<\/div>/);
+
+            if (hrefMatch && imgMatch && titleMatch) {
+                results.push({
+                    title: titleMatch[1].trim(),
+                    image: imgMatch[1].trim(),
+                    href: hrefMatch[1].trim()
+                });
             }
         }
-        // If no results found, return empty list
+
         return JSON.stringify(results);
-    } catch (error) {
-        console.log('Search error:', error);
+    } catch (e) {
+        console.log("Search error:", e);
         return JSON.stringify([]);
     }
 }
 
 async function extractDetails(url) {
     try {
-        const headers = { 'User-Agent': 'Mozilla/5.0' };
-        const response = await fetchV2(url, headers);
-        const html = await response.text();
-        // Description from "قصة الفيلم" section
-        let description = "";
-        const descMatch = html.match(/### قصة الفيلم\s*([\s\S]*?)<\/span>/) 
-                       || html.match(/### قصة الفيلم\s*([\s\S]*?)\n/);
-        if (descMatch) {
-            description = descMatch[1].trim();
-        }
-        // Year (the first heading after title)
-        let year = "";
-        const yearMatch = html.match(/#\s*فيلم\s*.+?\n##\s*(\d{4})/);
-        if (yearMatch) {
-            year = yearMatch[1];
-        }
-        // Genre (categories line after year)
-        let genres = "";
-        const genreMatch = html.match(/##\s*([^\n]+)\n/);
-        if (genreMatch) {
-            genres = genreMatch[1].trim();
-        }
-        // Duration and rating
-        let duration = "";
-        let rating = "";
-        const infoMatch = html.match(/<li>\s*([\dhm ]+min)\s*<\/li>\s*<li>\s*([\d.]+\/10)\s*<\/li>/);
+        const res = await fetchV2(url);
+        const html = await res.text();
+
+        const descMatch = html.match(/<div id="movie-desc"[^>]*>[\s\S]*?<h2[^>]*>([^<]+)<\/h2>[\s\S]*?<h2[^>]*>([^<]+)<\/h2>/);
+        const infoMatch = html.match(/<ul id="info">([\s\S]*?)<\/ul>/);
+        let duration = '', rating = '';
+
         if (infoMatch) {
-            duration = infoMatch[1].trim();
-            rating = infoMatch[2].trim();
+            const timeMatch = infoMatch[1].match(/glyphicon-time"><\/span>\s*([^<\n]+)/);
+            const rateMatch = infoMatch[1].match(/glyphicon-star-empty"[^>]*><\/span>\s*([^<\n]+)/);
+            if (timeMatch) duration = timeMatch[1].trim();
+            if (rateMatch) rating = rateMatch[1].trim();
         }
-        const details = {
-            description: description || "",
-            genre: genres,
-            rating: rating,
-            duration: duration,
-            year: year
-        };
-        return JSON.stringify([details]);
-    } catch (error) {
-        console.log('Details error:', error);
-        return JSON.stringify([{
-            description: '',
-            genre: '',
-            rating: '',
-            duration: '',
-            year: ''
-        }]);
+
+        const overview = descMatch ? `${descMatch[2].trim()}` : 'No description';
+        const aliases = duration ? `Duration: ${duration}` : 'Duration: Unknown';
+        const airdate = rating ? `Rating: ${rating}` : 'Rating: Unknown';
+
+        return JSON.stringify([
+            {
+                description: overview,
+                aliases: aliases,
+                airdate: airdate
+            }
+        ]);
+    } catch (err) {
+        console.log("Details error:", err);
+        return JSON.stringify([
+            {
+                description: "Could not load description",
+                aliases: "Duration: Unknown",
+                airdate: "Rating: Unknown"
+            }
+        ]);
     }
 }
 
 async function extractEpisodes(url) {
     try {
-        // Assuming 'url' is the movie page URL, transform to view page
-        const match = url.match(/https?:\/\/iwaatch\.com\/movie\/(.+)$/);
-        if (!match) {
-            return JSON.stringify([]);
-        }
-        const movieId = match[1];
-        const viewUrl = `https://iwaatch.com/view/${movieId}`;
-        const episodes = [{
-            href: viewUrl,
-            number: "1"
-        }];
-        return JSON.stringify(episodes);
-    } catch (error) {
-        console.log('Episodes error:', error);
+        return JSON.stringify([
+            {
+                title: "Full Movie",
+                number: 1,
+                href: url
+            }
+        ]);
+    } catch (e) {
+        console.log("Episode error:", e);
         return JSON.stringify([]);
     }
 }
 
 async function extractStreamUrl(url) {
     try {
-        const headers = { 'User-Agent': 'Mozilla/5.0' };
-        const response = await fetchV2(url, headers);
-        const html = await response.text();
-        const streams = {};
-        // Extract <source> URLs
-        const sourceRegex = /<source[^>]+src="([^"]+)"[^>]*>/g;
-        let match;
-        while ((match = sourceRegex.exec(html)) !== null) {
-            const src = match[1];
-            if (src.includes("1080")) {
-                streams["1080p"] = src;
-            } else if (src.includes("720")) {
-                streams["720p"] = src;
-            } else if (src.includes("480")) {
-                streams["480p"] = src;
-            }
-        }
-        // Extract Arabic subtitle track
-        let subtitles = "";
-        const trackMatch = html.match(/<track[^>]+src="([^"]+\.vtt)"[^>]+srclang="ar"/);
+        const res = await fetchV2(url);
+        const html = await res.text();
+
+        const sources = [...html.matchAll(/<source\s+src="([^"]+)"[^>]*type="video\/mp4"[^>]*size="(\d+)"/g)];
+        const trackMatch = html.match(/<track\s+src="([^"]+)"[^>]*label="Arabic"[^>]*>/);
+
+        const streams = sources.map(source => {
+            return {
+                title: `${source[2]}p`,
+                url: source[1]
+            };
+        });
+
+        let subtitles = '';
         if (trackMatch) {
             subtitles = trackMatch[1];
         }
-        const result = { streams: streams, subtitles: subtitles };
-        return JSON.stringify(result);
-    } catch (error) {
-        console.log('StreamUrl error:', error);
-        return JSON.stringify({ streams: {}, subtitles: "" });
+
+        return JSON.stringify({
+            streams,
+            subtitles
+        });
+    } catch (e) {
+        console.log("Stream extract error:", e);
+        return JSON.stringify({
+            streams: [],
+            subtitles: ''
+        });
     }
 }
